@@ -4,3 +4,7 @@ whitelist-mode: false
 allow-permission-override: true
 #Whether to apply the trade flag by default.
 trade-default: false
+#Automatically delete non-landlord QuickShop shops inside a residence/subzone when its rent ends (unrent, eviction, or failed auto-renew).
+delete-shops-on-rent-end: true
+#Automatically delete QuickShop shops inside a residence when the residence is deleted.
+delete-shops-on-residence-delete: false
