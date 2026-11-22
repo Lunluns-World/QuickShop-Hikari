@@ -3,6 +3,9 @@ package com.ghostchu.quickshop.compatibility.residence;
 import com.bekvon.bukkit.residence.Residence;
 import com.bekvon.bukkit.residence.api.ResidenceApi;
 import com.bekvon.bukkit.residence.containers.Flags;
+import com.bekvon.bukkit.residence.containers.ResAdmin;
+import com.bekvon.bukkit.residence.containers.ResidencePlayer;
+import com.bekvon.bukkit.residence.permissions.PermissionGroup;
 import com.bekvon.bukkit.residence.protection.ClaimedResidence;
 import com.bekvon.bukkit.residence.protection.FlagPermissions;
 import com.ghostchu.quickshop.api.event.economy.ShopPurchaseEvent;
@@ -15,8 +18,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.server.PluginEnableEvent;
 import org.bukkit.plugin.Plugin;
-
-import java.util.Map;
 
 public final class Main extends CompatibilityModule {
 
@@ -73,28 +74,39 @@ public final class Main extends CompatibilityModule {
       return;
     }
     event.user().getBukkitPlayer().ifPresent(player->{
-      if(!playerHas(residence.getPermissions(), player, CREATE_FLAG, false)) {
-        if(!playerHas(Residence.getInstance().getWorldFlags().getPerms(shopLoc.getWorld().getName()), player, CREATE_FLAG, false)) {
-          event.setCancelled(true, getApi().getTextManager().of(event.user(), "addon.residence.creation-flag-denied").forLocale());
-        }
+      if(!hasFlag(residence, shopLoc, player, CREATE_FLAG, false)) {
+        event.setCancelled(true, getApi().getTextManager().of(event.user(), "addon.residence.creation-flag-denied").forLocale());
       }
     });
   }
 
-  private boolean playerHas(final FlagPermissions permissions, final Player player, final String name, final boolean def) {
+  private boolean hasFlag(final ClaimedResidence residence, final Location shopLoc, final Player player, final String name, final boolean baseDefault) {
+    if (ResAdmin.isResAdmin(player)) {
+      return true;
+    }
+    final String worldName = shopLoc.getWorld() != null ? shopLoc.getWorld().getName() : residence.getWorldName();
+    FlagPermissions worldPerms = null;
+    if (worldName != null) {
+      final ResidencePlayer rPlayer = ResidencePlayer.get(player);
+      final PermissionGroup group = rPlayer != null ? rPlayer.getGroup(worldName) : null;
+      final String groupName = group != null ? group.getGroupName() : null;
+      worldPerms = groupName != null
+          ? Residence.getInstance().getWorldFlags().getPerms(worldName, groupName)
+          : Residence.getInstance().getWorldFlags().getPerms(worldName);
+    }
+    final boolean worldDefault = worldPerms != null
+        ? playerHas(worldPerms, player, worldName, name, baseDefault)
+        : baseDefault;
+    return playerHas(residence.getPermissions(), player, worldName, name, worldDefault);
+  }
+
+  private boolean playerHas(final FlagPermissions permissions, final Player player, final String worldName, final String name, final boolean def) {
 
     final Flags internalFlag = Flags.getFlag(name);
-    if(internalFlag == null) {
-      final Map<String, Boolean> permPlayerMap = permissions.getPlayerFlags(player.getName());
-      final Map<String, Boolean> permGlobalMap = permissions.getFlags();
-      if(permPlayerMap != null) {
-        return permPlayerMap.getOrDefault(name, permGlobalMap.getOrDefault(name, def));
-      } else {
-        return permGlobalMap.getOrDefault(name, def);
-      }
-    } else {
-      return permissions.playerHas(player, internalFlag, def);
+    if(internalFlag != null) {
+      return permissions.playerHas(player, worldName, internalFlag, def);
     }
+    return permissions.playerHas(player.getUniqueId(), worldName, name, def);
   }
 
   @EventHandler(ignoreCancelled = true)
@@ -106,10 +118,8 @@ public final class Main extends CompatibilityModule {
       return;
     }
     event.getPurchaser().getBukkitPlayer().ifPresent(player->{
-      if(!playerHas(residence.getPermissions(), player, TRADE_FLAG, defaultTrade)) {
-        if(!playerHas(Residence.getInstance().getWorldFlags().getPerms(shopLoc.getWorld().getName()), player, TRADE_FLAG, defaultTrade)) {
-          event.setCancelled(true, getApi().getTextManager().of(player, "addon.residence.trade-flag-denied").forLocale());
-        }
+      if(!hasFlag(residence, shopLoc, player, TRADE_FLAG, defaultTrade)) {
+        event.setCancelled(true, getApi().getTextManager().of(player, "addon.residence.trade-flag-denied").forLocale());
       }
     });
   }
